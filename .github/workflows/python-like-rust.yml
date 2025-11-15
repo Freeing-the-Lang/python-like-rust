@@ -1,4 +1,4 @@
-name: "python-like-rust — 3OS Build + ProofLedger + Clean Release"
+name: "Rust-like-Go — 3OS Build + ProofLedger + Clean Release"
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: python-like-rust-${{ github.ref }}
+  group: rust-like-go-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
       # ----------------------------------------------------------
       # Checkout
       # ----------------------------------------------------------
-      - name: Checkout Repo
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -38,46 +38,47 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       # ----------------------------------------------------------
-      # Build
+      # Build Binary
       # ----------------------------------------------------------
       - name: Build Project
+        shell: bash
         run: |
           cargo build --release
           mkdir -p dist
 
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp target/release/python-like-rust.exe dist/out-windows.exe
+            cp target/release/rust-like-go.exe dist/out-windows.exe
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-            cp target/release/python-like-rust dist/out-macos
+            cp target/release/rust-like-go dist/out-macos
           else
-            cp target/release/python-like-rust dist/out-linux
+            cp target/release/rust-like-go dist/out-linux
           fi
 
       # ----------------------------------------------------------
-      # ProofLedger 생성
+      # Generate ProofLedger
       # ----------------------------------------------------------
       - name: Generate ProofLedger
         shell: bash
         run: |
           mkdir -p dist
-          echo "Repository: python-like-rust" > dist/proofledger-${{ matrix.os }}.txt
+          echo "Repository: rust-like-go" > dist/proofledger-${{ matrix.os }}.txt
           echo "Commit: ${{ github.sha }}" >> dist/proofledger-${{ matrix.os }}.txt
           echo "Branch: ${{ github.ref }}" >> dist/proofledger-${{ matrix.os }}.txt
           echo "OS: ${{ matrix.os }}" >> dist/proofledger-${{ matrix.os }}.txt
-          echo "Build Time: $(date -u)" >> dist/proofledger-${{ matrix.os }}.txt
+          echo "Build Time (UTC): $(date -u)" >> dist/proofledger-${{ matrix.os }}.txt
 
       # ----------------------------------------------------------
-      # Upload per-OS artifacts (각 OS 개별 업로드)
+      # Upload OS artifact
       # ----------------------------------------------------------
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: python-like-rust-${{ matrix.os }}
+          name: rust-like-go-${{ matrix.os }}
           path: dist/*
 
 
   # ==========================================================
-  # Release Job — 3OS 빌드 끝나면 실행
+  # Release job
   # ==========================================================
   release:
     name: "Create Clean Release"
@@ -85,31 +86,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Download Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-bundle
 
-      # ------------------------------------------------------
-      # Zip Packaging
-      # ------------------------------------------------------
-      - name: Create ZIP bundle
+      - name: Compress Bundle
+        shell: bash
         run: |
           cd release-bundle
-          zip -r python-like-rust-release.zip .
+          zip -r rust-like-go-release.zip .
 
-      # ------------------------------------------------------
-      # Create Release
-      # ------------------------------------------------------
       - name: Create GitHub Release
-        id: create_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: autobuild-${{ github.run_id }}
-          name: "python-like-rust — AutoBuild ${{ github.run_id }}"
-          files: release-bundle/python-like-rust-release.zip
+          name: "Rust-like-Go — AutoBuild ${{ github.run_id }}"
+          files: release-bundle/rust-like-go-release.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
