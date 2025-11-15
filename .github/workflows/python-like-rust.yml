@@ -1,0 +1,115 @@
+name: "python-like-rust — 3OS Build + ProofLedger + Clean Release"
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: python-like-rust-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  build-3os:
+    name: "Build — ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      # ----------------------------------------------------------
+      # Checkout
+      # ----------------------------------------------------------
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ----------------------------------------------------------
+      # Install Rust
+      # ----------------------------------------------------------
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # ----------------------------------------------------------
+      # Build
+      # ----------------------------------------------------------
+      - name: Build Project
+        run: |
+          cargo build --release
+          mkdir -p dist
+
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/release/python-like-rust.exe dist/out-windows.exe
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            cp target/release/python-like-rust dist/out-macos
+          else
+            cp target/release/python-like-rust dist/out-linux
+          fi
+
+      # ----------------------------------------------------------
+      # ProofLedger 생성
+      # ----------------------------------------------------------
+      - name: Generate ProofLedger
+        shell: bash
+        run: |
+          mkdir -p dist
+          echo "Repository: python-like-rust" > dist/proofledger-${{ matrix.os }}.txt
+          echo "Commit: ${{ github.sha }}" >> dist/proofledger-${{ matrix.os }}.txt
+          echo "Branch: ${{ github.ref }}" >> dist/proofledger-${{ matrix.os }}.txt
+          echo "OS: ${{ matrix.os }}" >> dist/proofledger-${{ matrix.os }}.txt
+          echo "Build Time: $(date -u)" >> dist/proofledger-${{ matrix.os }}.txt
+
+      # ----------------------------------------------------------
+      # Upload per-OS artifacts (각 OS 개별 업로드)
+      # ----------------------------------------------------------
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-like-rust-${{ matrix.os }}
+          path: dist/*
+
+
+  # ==========================================================
+  # Release Job — 3OS 빌드 끝나면 실행
+  # ==========================================================
+  release:
+    name: "Create Clean Release"
+    needs: build-3os
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-bundle
+
+      # ------------------------------------------------------
+      # Zip Packaging
+      # ------------------------------------------------------
+      - name: Create ZIP bundle
+        run: |
+          cd release-bundle
+          zip -r python-like-rust-release.zip .
+
+      # ------------------------------------------------------
+      # Create Release
+      # ------------------------------------------------------
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: autobuild-${{ github.run_id }}
+          name: "python-like-rust — AutoBuild ${{ github.run_id }}"
+          files: release-bundle/python-like-rust-release.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
